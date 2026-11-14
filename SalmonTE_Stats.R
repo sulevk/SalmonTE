@@ -39,7 +39,16 @@ do.deseq2 <- function(dat) {
                                 colData = col_data,
                                 design = ~condition)
   dds <- dds[ rowSums(counts(dds)) > 10, ]
-  dds <- DESeq(dds)
+  dds <- tryCatch(DESeq(dds), error = function(e) {
+    # Too few TEs to fit a dispersion trend (typical for low-coverage data):
+    # fall back to gene-wise estimates, as DESeq2's own error message advises.
+    message("DESeq2 dispersion trend fit failed (", conditionMessage(e),
+            "); using gene-wise dispersion estimates instead.")
+    dds <- estimateSizeFactors(dds)
+    dds <- estimateDispersionsGeneEst(dds)
+    dispersions(dds) <- mcols(dds)$dispGeneEst
+    nbinomWaldTest(dds)
+  })
   res <- results(dds)
   df_res <- data.frame(res)
   dat$res <- df_res %>% rownames_to_column("name")
@@ -163,6 +172,11 @@ if(analysis == "DE" && !is.na(args[6])) {
 }
 count <- read.csv(file.path(args[1], "EXPR.csv"), row.names="TE", check.names = FALSE)
 col_data <- read.csv(file.path(args[1], "condition.csv"), row.names = "SampleID")
+missing <- setdiff(colnames(count), rownames(col_data))
+if (length(missing) > 0)
+  stop("condition.csv has no row for sample(s): ", paste(missing, collapse = ", "))
+# DESeq2 requires colData rows in the same order as the count columns
+col_data <- col_data[colnames(count), , drop = FALSE]
 annotation <- read.csv(file.path(args[1], "clades.csv"))
 message(sprintf("Step 3: Running the %s analysis...", analysis))
 dat <- SalmonTE(count, col_data, annotation, analysis, condition_level, args[2], args[3], args[4])

@@ -176,6 +176,25 @@ Once the conditions of every sample has been filled, we can run the test mode li
 SalmonTE.py test --inpath=SalmonTE_output --outpath=SalmonTE_statistical_test --tabletype=csv --figtype=png --analysis_type=DE --conditions=control,treatment
 ```
 
+### Per-locus quantification with genomic coordinates (`index_loci`)
+
+The bundled indexes contain one consensus sequence per TE subfamily, so they cannot tell you which genomic copy a read came from. `index_loci` builds an index in which **every genomic TE copy is its own target**. It cuts each copy out of the genome FASTA using a TEtranscripts-format TE GTF (for example `hg38_rmsk_TE.gtf`, with `gene_id`, `transcript_id`, `family_id` and `class_id` attributes):
+
+```
+SalmonTE.py index_loci --ref_name=hg38_loci --genome=GRCh38.primary_assembly.fa --te_gtf=hg38_rmsk_TE.gtf --num_threads=8
+SalmonTE.py quant --reference=hg38_loci --exprtype=count --outpath=SalmonTE_loci_output FASTQ_DIR
+```
+
+* The chromosome names in the GTF and the genome FASTA must match (`chr1` vs `1`). Loci on sequences missing from the FASTA, and loci shorter than `--min_length` (default 31, Salmon's k-mer size), are skipped with a warning.
+* Copies on the minus strand are reverse-complemented. Identical copies are kept as separate targets (`--keepDuplicates`).
+* Locus IDs use the TElocal / TEfastR format `transcript_id:gene_id:family_id:class_id` (for example `L1M2_dup229:L1M2:L1:LINE`).
+* Besides the usual files, `quant` writes:
+  * `EXPR_LOCUS.csv`: `locus_id, chrom, start, end, strand, transcript_id, subfamily, family, class, length`, then one column per sample. Coordinates are 1-based and inclusive, as in the GTF.
+  * `EXPR_SUBFAMILY.csv`: loci summed per subfamily.
+  * `EXPR.csv` and `clades.csv` are per locus, so `SalmonTE.py test` runs directly at locus level.
+
+Caveats: a whole-genome TE index (about 4.7 million hg38 copies) needs far more memory and time than the consensus index. Because the index contains no gene sequences, reads from gene transcripts that contain TE sequence are still counted as TE. Counts for young, near-identical copies are EM estimates.
+
 ## How to Cite?
 
 ```

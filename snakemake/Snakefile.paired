@@ -24,7 +24,7 @@ rule run_salmon_fq:
         directory(join(OUTPUT_DIR,"{sample_fq}"))
 
     shell:
-        SALMON_PATH + " quant -q -i {input.idx} -l A -1 {input.r1} -2 {input.r2} -o {output} -p " + NUM_THREADS + " 2>/dev/null"
+        SALMON_PATH + " quant -q -i {input.idx} -l A -1 {input.r1} -2 {input.r2} -o {output} -p " + NUM_THREADS
 
 
 rule run_salmon_gz:
@@ -36,7 +36,7 @@ rule run_salmon_gz:
         directory(join(OUTPUT_DIR,"{sample_gz}"))
 
     shell:
-        SALMON_PATH + " quant -q -i {input.idx} -l A -1 {input.r1} -2 {input.r2} -o {output} -p " + NUM_THREADS + " 2>/dev/null"
+        SALMON_PATH + " quant -q -i {input.idx} -l A -1 {input.r1} -2 {input.r2} -o {output} -p " + NUM_THREADS
 
 
 
@@ -67,7 +67,7 @@ rule collect_abundance:
 
         import pandas as pd
         with open(str(output), "w") as oup:
-            oup.write(pd.DataFrame(tb).to_csv(sep=",", index_label="TE"))
+            oup.write(pd.DataFrame(tb)[sorted(tb)].to_csv(sep=",", index_label="TE"))
 
 
 rule collect_mappability:

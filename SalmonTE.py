@@ -3,6 +3,7 @@
 
 Usage:
     SalmonTE.py index [--ref_name=ref_name] (--input_fasta=fa_file) [--te_only]
+    SalmonTE.py index_loci (--ref_name=ref_name) (--genome=genome_fa) (--te_gtf=te_gtf) [--min_length=min_length] [--num_threads=numthreads]
     SalmonTE.py quant [--reference=genome] [--outpath=outpath] [--num_threads=numthreads] [--exprtype=exprtype] FILE...
     SalmonTE.py test [--inpath=inpath] [--outpath=outpath] [--tabletype=tabletype] [--figtype=figtype] [--analysis_type=analysis_type] [--conditions=conditions]
     SalmonTE.py (-h | --help)
@@ -11,6 +12,13 @@ Usage:
 Options:
     -h --help     Show this screen.
     --version     Show version.
+
+index_loci builds a per-locus index: every TE copy listed in a TEtranscripts-
+format TE GTF (gene_id / transcript_id / family_id / class_id attributes, e.g.
+hg38_rmsk_TE.gtf) is cut out of the genome FASTA and indexed as its own Salmon
+target. `quant` against such an index additionally writes EXPR_LOCUS.csv
+(per-locus values with genomic coordinates) and EXPR_SUBFAMILY.csv (loci summed
+per subfamily). --min_length defaults to 31 (Salmon's k-mer size).
 """
 from docopt import docopt
 from glob import glob
@@ -20,14 +28,58 @@ import sys
 import os
 import tempfile
 import gzip
+import shutil
+
+
+def resolve_salmon_bin():
+    salmon_bin = os.environ.get("SALMONTE_SALMON_BIN")
+    if salmon_bin:
+        return salmon_bin
+
+    # Prefer Homebrew salmon on macOS when available to avoid picking a stale
+    # conda binary from PATH.
+    for candidate in ["/usr/local/bin/salmon", "/opt/homebrew/bin/salmon"]:
+        if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+
+    path_salmon = shutil.which("salmon")
+    if path_salmon:
+        return path_salmon
+
+    return os.path.join(os.path.dirname(__file__), "salmon/{}/bin/salmon".format(sys.platform))
+
+
+def _raise_run_salmon_error(param, salmon_bin):
+    index_dir = param["--reference"]
+    old_index = os.path.exists(os.path.join(index_dir, "refInfo.json")) and not os.path.exists(os.path.join(index_dir, "info.json"))
+    guidance = ""
+    if old_index:
+        guidance = (
+            " Detected an old reference index format (refInfo.json). "
+            "This index is not compatible with modern Salmon quant binaries. "
+            "Use a Salmon version compatible with RapMap indexes or rebuild the index with the same Salmon version used for quantification."
+        )
+
+    raise RuntimeError(
+        "Salmon/Snakemake quantification failed before EXPR.csv was created. "
+        "Inspect Snakemake log files under .snakemake/log and rerun without stderr suppression for details. "
+        "Salmon binary: {}. Reference index: {}.{}".format(salmon_bin, index_dir, guidance)
+    )
+
+
+def is_reference_index_dir(index_dir):
+    markers = ["versionInfo.json", "refInfo.json", "info.json", "index.ssi"]
+    return os.path.isdir(index_dir) and any(os.path.exists(os.path.join(index_dir, marker)) for marker in markers)
+
+FASTQ_EXTS = (".fastq", ".fq", ".fastq.gz", ".fq.gz")
+
 
 def is_fastq(file_name):
-    file_name = file_name.lower()
-    if file_name.endswith("fastq"): return True
-    if file_name.endswith("fq"): return True
-    if file_name.endswith("fq.gz"): return True
-    if file_name.endswith("fastq.gz"): return True
-    return False
+    # Directories are never FASTQ files, and the extension must follow a dot:
+    # a folder called "fq/" or "my_fastq/" used to be mistaken for a FASTQ file.
+    if os.path.isdir(file_name):
+        return False
+    return file_name.lower().endswith(FASTQ_EXTS)
 
 
 def get_basename_noext(file_name):
@@ -137,16 +189,18 @@ def collect_FASTQ_files(FILE):
     return ret
 
 def run_salmon(param):
+    os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
     import snakemake
     snakefile = os.path.join(os.path.dirname(__file__), "snakemake/Snakefile.paired" if param["paired"] else "snakemake/Snakefile.single")
+    salmon_bin = resolve_salmon_bin()
 
-    snakemake.snakemake(
+    ok = snakemake.snakemake(
         snakefile=snakefile,
         config={
             "input_path": param["inpath"],
             "output_path": param["--outpath"],
             "index": param["--reference"],
-            "salmon": os.path.join(os.path.dirname(__file__),"salmon/{}/bin/salmon"),
+            "salmon": salmon_bin,
             "num_threads" : param["--num_threads"],
             "exprtype": param["--exprtype"],
         },
@@ -154,7 +208,11 @@ def run_salmon(param):
         lock=False
     )
 
-    with open(os.path.join(param["--outpath"], "EXPR.csv" ), "r") as inp:
+    expr_file = os.path.join(param["--outpath"], "EXPR.csv")
+    if not ok or not os.path.exists(expr_file):
+        _raise_run_salmon_error(param, salmon_bin)
+
+    with open(expr_file, "r") as inp:
         sample_ids = inp.readline().strip().split(',')[1:]
     with open(os.path.join(param["--outpath"], "condition.csv" ), "w") as oup:
         oup.write("SampleID,condition\n")
@@ -195,7 +253,11 @@ def build_salmon_index(in_fasta, ref_id, te_only):
         oup_clade.write("name,class,clade\n")
         for line in inp:
             if line.startswith(">"):
-                name, anno = line[1:].strip().split()[:2]
+                parts = line[1:].strip().split()
+                if len(parts) == 0:
+                    continue
+                name = parts[0]
+                anno = parts[1] if len(parts) > 1 else parts[0]
                 if anno in clade_dict:
                     clade, repeat_class = clade_dict[anno]
                 else: 
@@ -209,13 +271,182 @@ def build_salmon_index(in_fasta, ref_id, te_only):
             else:
                 oup_fa.write(line.strip()+"\n")
 
-    salmon_bin = os.path.join(os.path.dirname(__file__), "salmon/{}/bin/salmon").format(sys.platform)
-    cmd = "{} index -t {} -i {} --type=quasi".format(salmon_bin, file_fa, out_path)
-    os.system(cmd)
+    salmon_bin = resolve_salmon_bin()
+    cmd = "{} index --transcripts {} --index {}".format(salmon_bin, file_fa, out_path)
+    ret = os.system(cmd)
+    if ret != 0:
+        logging.error("Failed to build '{}' index using command: {}".format(ref_id, cmd))
+        sys.exit(1)
     logging.info("Building '{}' index was finished!".format(ref_id))
 
 
+LOCI_FILE = "loci.csv"
+
+# class_id -> clade label, matching the labels used in the bundled clades.csv
+CLASS_TO_CLADE = {
+    "LINE": "Non-LTR Retrotransposon",
+    "SINE": "Non-LTR Retrotransposon",
+    "Retroposon": "Non-LTR Retrotransposon",
+    "LTR": "LTR Retrotransposon",
+    "DNA": "DNA transposon",
+    "RC": "DNA transposon",
+}
+
+_REVCOMP = str.maketrans("ACGTRYKMBVDHNacgtrykmbvdhn", "TGCAYRMKVBHDNtgcayrmkvbhdn")
+
+
+def _gtf_attr(attr, key):
+    tag = key + ' "'
+    i = attr.find(tag)
+    if i < 0:
+        return None
+    i += len(tag)
+    return attr[i:attr.find('"', i)]
+
+
+def read_te_loci(te_gtf):
+    """Parse a TEtranscripts-format TE GTF into per-locus records.
+
+    Locus IDs follow TElocal / TEfastR: transcript_id:gene_id:family_id:class_id,
+    made unique with a _N suffix if the GTF repeats one (R's make.unique(sep="_")).
+    """
+    loci, seen = [], {}
+    opener = gzip.open if te_gtf.endswith(".gz") else open
+    with opener(te_gtf, "rt") as inp:
+        for line in inp:
+            if line.startswith("#"):
+                continue
+            f = line.rstrip("\n").split("\t")
+            if len(f) < 9 or f[2] != "exon":
+                continue
+            tid, sub, fam, cls = (_gtf_attr(f[8], k) for k in
+                                  ("transcript_id", "gene_id", "family_id", "class_id"))
+            if None in (tid, sub, fam, cls):
+                logging.error("TE GTF line lacks gene_id/transcript_id/family_id/class_id: %s", line.strip())
+                sys.exit(1)
+            name = ":".join((tid, sub, fam, cls))
+            if name in seen:
+                seen[name] += 1
+                name = "{}_{}".format(name, seen[name])
+            else:
+                seen[name] = 0
+            start, end = int(f[3]), int(f[4])
+            loci.append({"name": name, "chrom": f[0], "start": start, "end": end,
+                         "strand": f[6], "transcript_id": tid, "subfamily": sub,
+                         "family": fam, "class": cls, "length": end - start + 1})
+    return loci
+
+
+def _iter_fasta(path):
+    """Yield (chrom, sequence) one chromosome at a time."""
+    opener = gzip.open if path.endswith(".gz") else open
+    name, chunks = None, []
+    with opener(path, "rt") as inp:
+        for line in inp:
+            if line.startswith(">"):
+                if name is not None:
+                    yield name, "".join(chunks)
+                name, chunks = line[1:].split()[0], []
+            else:
+                chunks.append(line.strip())
+    if name is not None:
+        yield name, "".join(chunks)
+
+
+def build_locus_index(genome_fa, te_gtf, ref_id, min_length, num_threads):
+    """Build a Salmon index whose targets are individual genomic TE copies."""
+    for p in (genome_fa, te_gtf):
+        if not os.path.exists(p):
+            logging.error("Input file does not exist: %s", p)
+            sys.exit(1)
+    min_length = int(min_length) if min_length else 31
+    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference", ref_id)
+    os.makedirs(out_path, exist_ok=True)
+
+    logging.info("Reading TE loci from %s", te_gtf)
+    loci = read_te_loci(te_gtf)
+    by_chrom = {}
+    for rec in loci:
+        by_chrom.setdefault(rec["chrom"], []).append(rec)
+    logging.info("%d TE loci on %d sequences", len(loci), len(by_chrom))
+
+    file_fa = os.path.join(out_path, "ref.fa")
+    written, n_short, found = [], 0, set()
+    logging.info("Extracting TE sequences from %s", genome_fa)
+    with open(file_fa, "w") as oup:
+        for chrom, seq in _iter_fasta(genome_fa):
+            if chrom not in by_chrom:
+                continue
+            found.add(chrom)
+            for rec in by_chrom[chrom]:
+                s = seq[rec["start"] - 1:rec["end"]]
+                if len(s) < min_length:
+                    n_short += 1
+                    continue
+                if rec["strand"] == "-":
+                    s = s.translate(_REVCOMP)[::-1]
+                oup.write(">{}\n{}\n".format(rec["name"], s))
+                written.append(rec)
+    missing = set(by_chrom) - found
+    if missing:
+        logging.warning("%d GTF sequence(s) not in the genome FASTA (chromosome naming mismatch?), "
+                        "%d loci skipped, e.g. %s", len(missing),
+                        sum(len(by_chrom[c]) for c in missing), sorted(missing)[:3])
+    if n_short:
+        logging.warning("%d loci shorter than %d bp skipped", n_short, min_length)
+    if not written:
+        logging.error("No TE loci were extracted; check that the GTF and genome use the same chromosome names.")
+        sys.exit(1)
+
+    cols = ["name", "chrom", "start", "end", "strand", "transcript_id", "subfamily", "family", "class", "length"]
+    with open(os.path.join(out_path, LOCI_FILE), "w") as oup:
+        oup.write(",".join(cols) + "\n")
+        for rec in written:
+            oup.write(",".join(str(rec[c]) for c in cols) + "\n")
+    # clades.csv keyed by locus name, so `SalmonTE.py test` runs on locus-level EXPR.csv
+    with open(os.path.join(out_path, "clades.csv"), "w") as oup:
+        oup.write("name,class,clade\n")
+        for rec in written:
+            oup.write("{},{},{}\n".format(rec["name"], rec["class"],
+                                          CLASS_TO_CLADE.get(rec["class"], rec["class"])))
+
+    # --keepDuplicates: identical young copies must stay separate targets, otherwise
+    # Salmon collapses them and those loci vanish from quant.sf.
+    salmon_bin = resolve_salmon_bin()
+    cmd = "{} index --transcripts {} --index {} --keepDuplicates -p {}".format(
+        salmon_bin, file_fa, out_path, num_threads or 4)
+    logging.info("Indexing %d TE loci: %s", len(written), cmd)
+    if os.system(cmd) != 0:
+        logging.error("Failed to build '%s' locus index", ref_id)
+        sys.exit(1)
+    logging.info("Building '%s' locus index was finished!", ref_id)
+
+
+def write_locus_tables(reference, outpath):
+    """For a per-locus index, add coordinates to EXPR.csv (EXPR_LOCUS.csv) and
+    sum loci per subfamily (EXPR_SUBFAMILY.csv)."""
+    loci_file = os.path.join(reference, LOCI_FILE)
+    if not os.path.exists(loci_file):
+        return
+    import pandas as pd
+    loci = pd.read_csv(loci_file, dtype={"chrom": str})
+    expr = pd.read_csv(os.path.join(outpath, "EXPR.csv"), index_col="TE")
+    samples = list(expr.columns)
+    locus = loci.merge(expr, left_on="name", right_index=True, how="left")
+    locus[samples] = locus[samples].fillna(0.0)
+    locus = locus.rename(columns={"name": "locus_id"})
+    locus.to_csv(os.path.join(outpath, "EXPR_LOCUS.csv"), index=False)
+    sub = locus.groupby(["subfamily", "family", "class"], sort=True)[samples].sum().reset_index()
+    sub.to_csv(os.path.join(outpath, "EXPR_SUBFAMILY.csv"), index=False)
+    logging.info("Wrote per-locus table with coordinates (EXPR_LOCUS.csv, %d loci) "
+                 "and per-subfamily sums (EXPR_SUBFAMILY.csv)", len(locus))
+
+
 def run(args):
+    if args['index_loci']:
+        build_locus_index(args['--genome'], args['--te_gtf'], args['--ref_name'],
+                          args['--min_length'], args['--num_threads'])
+
     if args['quant']:
         if args['--exprtype'] is None:
             args['--exprtype'] = "TPM"
@@ -223,13 +454,18 @@ def run(args):
             args['--num_threads'] = 4
         if args['--outpath'] is None:
             args['--outpath'] = os.path.join(os.getcwd(), "SalmonTE_output/")
-        if args['--reference'] is None or args['--reference'] == "hs":
+        ref_arg = args['--reference']
+        if ref_arg is None or ref_arg == "hs":
             args['--reference'] = os.path.join(os.path.dirname(__file__), "reference/hs")
-        elif os.path.exists(os.path.join(os.path.dirname(__file__), "reference", args['--reference'],"versionInfo.json")):
-            args['--reference'] = os.path.join(os.path.dirname(__file__), "reference", args['--reference'])
+        elif is_reference_index_dir(ref_arg):
+            args['--reference'] = os.path.abspath(ref_arg)
         else:
-            logging.error("Reference file is not found!")
-            sys.exit(1)
+            bundled_ref = os.path.join(os.path.dirname(__file__), "reference", ref_arg)
+            if is_reference_index_dir(bundled_ref):
+                args['--reference'] = bundled_ref
+            else:
+                logging.error("Reference file is not found!")
+                sys.exit(1)
 
         if args['--reference'].startswith("./"):
            args['--reference'] = args['--reference'][2:]
@@ -244,6 +480,7 @@ def run(args):
         run_salmon(param)
         os.system("cp {}/clades.csv {}".format(args['--reference'],
                                                args['--outpath']))
+        write_locus_tables(args['--reference'], args['--outpath'])
 
     if args['index']:
         build_salmon_index(args['--input_fasta'], args['--ref_name'], args['--te_only'])
@@ -278,13 +515,16 @@ def run(args):
             args['--conditions'] = ""
         
         #  Rscript SalmonTE_Stats.R SalmonTE_output xls PDF tmp
-        os.system("Rscript {} {} {} {} {} {} {}".format( os.path.join(os.path.dirname(__file__), "SalmonTE_Stats.R"),
+        ret = os.system("Rscript {} {} {} {} {} {} {}".format( os.path.join(os.path.dirname(__file__), "SalmonTE_Stats.R"),
                                         args["--inpath"],
                                         args['--tabletype'],
                                         args['--figtype'],
                                         args['--outpath'],
                                         args['--analysis_type'],
                                         args['--conditions']))
+        if ret != 0:
+            logging.error("The statistical analysis (SalmonTE_Stats.R) failed; see the R error above.")
+            sys.exit(1)
 
 
 if __name__ == '__main__':
