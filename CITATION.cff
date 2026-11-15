@@ -1,0 +1,65 @@
+cff-version: 1.2.0
+message: >-
+  SalmonTE was developed by Jeong et al.; please cite their paper (preferred
+  citation below). If you used this fork's changes (bug fixes, modern Salmon
+  support or the per-locus index_loci mode), please also cite this software
+  record.
+title: "SalmonTE (sulevk fork): ultra-fast quantification of transposable elements, with per-locus mode and fixes"
+abstract: >-
+  Fork of SalmonTE, an ultra-fast and scalable quantification pipeline for
+  transposable elements from RNA-seq based on Salmon. This fork adds support
+  for modern Salmon versions, fixes FASTQ detection, condition ordering and
+  error reporting in the statistical test, and adds an index_loci mode that
+  quantifies individual genomic TE copies with coordinates.
+type: software
+authors:
+  - family-names: Jeong
+    given-names: Hyun-Hwan
+  - family-names: Yalamanchili
+    given-names: Hari Krishna
+  - family-names: Guo
+    given-names: Caiwei
+  - family-names: Shulman
+    given-names: Joshua M.
+  - family-names: Liu
+    given-names: Zhandong
+  - family-names: Koks
+    given-names: Sulev
+    orcid: "https://orcid.org/0000-0001-6087-6643"
+version: 0.4.1
+date-released: "2026-11-15"
+license: GPL-3.0-only
+repository-code: "https://github.com/sulevk/SalmonTE"
+keywords:
+  - transposable elements
+  - RNA-seq
+  - Salmon
+preferred-citation:
+  type: conference-paper
+  title: >-
+    An ultra-fast and scalable quantification pipeline for transposable
+    elements from next generation sequencing data
+  authors:
+    - family-names: Jeong
+      given-names: Hyun-Hwan
+    - family-names: Yalamanchili
+      given-names: Hari Krishna
+    - family-names: Guo
+      given-names: Caiwei
+    - family-names: Shulman
+      given-names: Joshua M.
+    - family-names: Liu
+      given-names: Zhandong
+  collection-title: Pacific Symposium on Biocomputing
+  volume: 23
+  start: 168
+  end: 179
+  year: 2018
+  doi: 10.1142/9789813235533_0016
+references:
+  - type: software
+    title: SalmonTE (original repository)
+    authors:
+      - family-names: Jeong
+        given-names: Hyun-Hwan
+    repository-code: "https://github.com/hyunhwaj/SalmonTE"

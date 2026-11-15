@@ -1,6 +1,19 @@
 # SalmonTE
 
+> **This is a fork** of [SalmonTE](https://github.com/hyunhwaj/SalmonTE) by
+> Jeong et al. It adds support for modern Salmon versions, several bug fixes,
+> and a per-locus mode (`index_loci`). See the change log below and
+> [How to cite](#how-to-cite). For a standalone per-locus tool, see
+> [SalmonTElocus](https://github.com/sulevk/SalmonTElocus).
+
 ## Change Logs
+
+* November 15, 2026 (`0.4.1`, sulevk fork):
+  * New `index_loci` mode: indexes every genomic TE copy from a genome FASTA + TE GTF; `quant` then writes `EXPR_LOCUS.csv` (with coordinates) and `EXPR_SUBFAMILY.csv`.
+  * Works with modern Salmon (2.x): automatic detection of the Salmon binary, a new index format, and clear errors when quantification fails.
+  * Fixed: a directory whose name ends in `fq` was taken for a FASTQ file.
+  * Fixed: `test` failed whenever `condition.csv` rows were not in the same order as the `EXPR.csv` columns; columns are now sorted and matched.
+  * `test` now exits with an error when the R script fails, and falls back to gene-wise dispersions when there are too few TEs for DESeq2's trend fit.
 
 * December 19, 2018: `SalmonTE` has been updated to `0.4` with some improvements!
   * Regarding [#14](https://github.com/hyunhwaj/SalmonTE/issues/14), now `SalmonTE` is coupled with the latest version of `snakemake`, so there is no more directory error. Furthermore, `SalmonTE` no longer runs with the older version of `snakemake`, please update the version of the `snakemake` package.
@@ -195,21 +208,23 @@ SalmonTE.py quant --reference=hg38_loci --exprtype=count --outpath=SalmonTE_loci
 
 Caveats: a whole-genome TE index (about 4.7 million hg38 copies) needs far more memory and time than the consensus index. Because the index contains no gene sequences, reads from gene transcripts that contain TE sequence are still counted as TE. Counts for young, near-identical copies are EM estimates.
 
-## How to Cite?
+## How to cite
 
-```
-@inbook{doi:10.1142/9789813235533_0016,
-author = {Hyun-Hwan Jeong and Hari Krishna Yalamanchili and Caiwei Guo and Joshua M. Shulman and Zhandong Liu},
-title = {An ultra-fast and scalable quantification pipeline for transposable elements from next generation sequencing data},
-booktitle = {Biocomputing 2018},
-chapter = {},
-pages = {168-179},
-doi = {10.1142/9789813235533_0016},
-URL = {http://www.worldscientific.com/doi/abs/10.1142/9789813235533_0016},
-eprint = {http://www.worldscientific.com/doi/pdf/10.1142/9789813235533_0016}
-publisher = WORLD SCIENTIFIC
-address = 
-year = 2017
-edition = 
+SalmonTE was developed by Jeong et al. Please cite their paper:
+
+> Jeong H-H, Yalamanchili HK, Guo C, Shulman JM, Liu Z (2018). An ultra-fast
+> and scalable quantification pipeline for transposable elements from next
+> generation sequencing data. *Pacific Symposium on Biocomputing* 23:168–179.
+> doi:[10.1142/9789813235533_0016](https://doi.org/10.1142/9789813235533_0016)
+
+```bibtex
+@inproceedings{jeong2018salmonte,
+  author    = {Jeong, Hyun-Hwan and Yalamanchili, Hari Krishna and Guo, Caiwei and Shulman, Joshua M. and Liu, Zhandong},
+  title     = {An ultra-fast and scalable quantification pipeline for transposable elements from next generation sequencing data},
+  booktitle = {Biocomputing 2018: Proceedings of the Pacific Symposium},
+  pages     = {168--179},
+  year      = {2018},
+  publisher = {World Scientific},
+  doi       = {10.1142/9789813235533_0016}
 }
 ```
