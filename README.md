@@ -1,5 +1,7 @@
 # SalmonTE
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24239085.svg)](https://doi.org/10.5281/zenodo.24239085)
+
 > **This is a fork** of [SalmonTE](https://github.com/hyunhwaj/SalmonTE) by
 > Jeong et al. It adds support for modern Salmon versions, several bug fixes,
 > and a per-locus mode (`index_loci`). See the change log below and
@@ -228,3 +230,17 @@ SalmonTE was developed by Jeong et al. Please cite their paper:
   doi       = {10.1142/9789813235533_0016}
 }
 ```
+
+If you used this fork's changes (modern Salmon support, the bug fixes or
+`index_loci`), please also cite the fork's software record. It lists the
+original authors and the fork author:
+
+> Jeong H-H, Yalamanchili HK, Guo C, Shulman JM, Liu Z, Koks S. SalmonTE
+> (sulevk fork). Zenodo. https://doi.org/10.5281/zenodo.24239085
+
+| DOI | Use |
+|---|---|
+| [10.5281/zenodo.24239085](https://doi.org/10.5281/zenodo.24239085) | **All fork versions.** Always resolves to the latest fork release |
+| [10.5281/zenodo.24239086](https://doi.org/10.5281/zenodo.24239086) | **v0.4.1 only.** Use this when a methods section must name the exact version used |
+
+GitHub's "Cite this repository" button gives both references in APA and BibTeX.

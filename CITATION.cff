@@ -29,6 +29,7 @@ authors:
 version: 0.4.1
 date-released: "2026-11-15"
 license: GPL-3.0-only
+doi: 10.5281/zenodo.24239085
 repository-code: "https://github.com/sulevk/SalmonTE"
 keywords:
   - transposable elements
