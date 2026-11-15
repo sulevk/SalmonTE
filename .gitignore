@@ -11,3 +11,19 @@ __pycache__/
 SalmonTE_*/
 example/*/
 .vscode
+# Local data and generated files (not part of the code)
+tissuetest/
+CombSeqHS_TE_2021*.fa
+combseqhs_2021_sanitized.fa
+repbase_TE.fa
+reference/combseqhs_2021/
+reference/combseqhs_2021_sanitized/
+reference/hs_v2/
+reference/hs_v3/
+reference/repbase/
+# Salmon index files rebuilt in reference/hs by modern Salmon
+reference/hs/duplicate_clusters.tsv
+reference/hs/index.*
+reference/hs/info.json
+reference/hs/refseq.bin
+reference/hs/refseq_offsets.json
