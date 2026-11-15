@@ -243,6 +243,6 @@ original authors and the fork author:
 | DOI | Use |
 |---|---|
 | [10.5281/zenodo.24239085](https://doi.org/10.5281/zenodo.24239085) | **All fork versions.** Always resolves to the latest fork release |
-| [10.5281/zenodo.24239086](https://doi.org/10.5281/zenodo.24239086) | **v0.4.1 only.** Use this when a methods section must name the exact version used |
+| [10.5281/zenodo.24239112](https://doi.org/10.5281/zenodo.24239112) | **v0.4.2 only.** Use this when a methods section must name the exact version used |
 
 GitHub's "Cite this repository" button gives both references in APA and BibTeX.
