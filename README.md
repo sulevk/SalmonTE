@@ -10,6 +10,8 @@
 
 ## Change Logs
 
+* November 15, 2026 (`0.4.2`, sulevk fork): Zenodo DOI and "How to cite" section for the fork; no code changes.
+
 * November 15, 2026 (`0.4.1`, sulevk fork):
   * New `index_loci` mode: indexes every genomic TE copy from a genome FASTA + TE GTF; `quant` then writes `EXPR_LOCUS.csv` (with coordinates) and `EXPR_SUBFAMILY.csv`.
   * Works with modern Salmon (2.x): automatic detection of the Salmon binary, a new index format, and clear errors when quantification fails.

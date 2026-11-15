@@ -529,5 +529,5 @@ def run(args):
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
-    args = docopt(__doc__, version='SalmonTE 0.4.1 (sulevk fork)')
+    args = docopt(__doc__, version='SalmonTE 0.4.2 (sulevk fork)')
     run(args)
